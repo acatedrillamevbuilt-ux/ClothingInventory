@@ -35,6 +35,7 @@
             lblStatus = new Label();
             btnManage = new Button();
             btnSales = new Button();
+            btnLowStock = new Button();
             ((System.ComponentModel.ISupportInitialize)dgvResults).BeginInit();
             SuspendLayout();
             // 
@@ -84,7 +85,7 @@
             // btnManage
             // 
             btnManage.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnManage.Location = new Point(602, 18);
+            btnManage.Location = new Point(495, 18);
             btnManage.Name = "btnManage";
             btnManage.Size = new Size(154, 23);
             btnManage.TabIndex = 5;
@@ -95,7 +96,7 @@
             // btnSales
             // 
             btnSales.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnSales.Location = new Point(480, 18);
+            btnSales.Location = new Point(373, 18);
             btnSales.Name = "btnSales";
             btnSales.Size = new Size(116, 23);
             btnSales.TabIndex = 6;
@@ -103,11 +104,23 @@
             btnSales.UseVisualStyleBackColor = true;
             btnSales.Click += btnSales_Click;
             // 
+            // btnLowStock
+            // 
+            btnLowStock.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnLowStock.Location = new Point(655, 18);
+            btnLowStock.Name = "btnLowStock";
+            btnLowStock.Size = new Size(116, 23);
+            btnLowStock.TabIndex = 7;
+            btnLowStock.Text = "Low Stock Items";
+            btnLowStock.UseVisualStyleBackColor = true;
+            btnLowStock.Click += btnLowStock_Click;
+            // 
             // StaffSearchForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 450);
+            Controls.Add(btnLowStock);
             Controls.Add(btnSales);
             Controls.Add(btnManage);
             Controls.Add(lblStatus);
@@ -132,5 +145,6 @@
         private Label lblStatus;
         private Button btnManage;
         private Button btnSales;
+        private Button btnLowStock;
     }
 }

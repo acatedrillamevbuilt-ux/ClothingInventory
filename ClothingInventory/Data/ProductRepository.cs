@@ -245,5 +245,56 @@ namespace ClothingInventory.Data
             return results;
         }
 
+        // True if another product already has the same name, size and colour
+        public bool Exists(string name, string size, string color, int? excludeId = null)
+        {
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT COUNT(*) FROM Products
+                        WHERE Name = @name COLLATE NOCASE
+                          AND Size = @size COLLATE NOCASE
+                          AND Color = @color COLLATE NOCASE
+                          AND (@id IS NULL OR Id <> @id);";
+            cmd.Parameters.AddWithValue("@name", name);
+            cmd.Parameters.AddWithValue("@size", size);
+            cmd.Parameters.AddWithValue("@color", color);
+            cmd.Parameters.AddWithValue("@id", (object?)excludeId ?? DBNull.Value);
+
+            return (long)cmd.ExecuteScalar()! > 0;
+        }
+
+        // Products at or below the given stock level, lowest first
+        public List<Product> GetLowStock(int level)
+        {
+            var results = new List<Product>();
+
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT * FROM Products WHERE Quantity <= @level ORDER BY Quantity, Name;";
+            cmd.Parameters.AddWithValue("@level", level);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(new Product
+                {
+                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                    Name = reader.GetString(reader.GetOrdinal("Name")),
+                    Category = reader.GetString(reader.GetOrdinal("Category")),
+                    Size = reader.GetString(reader.GetOrdinal("Size")),
+                    Color = reader.GetString(reader.GetOrdinal("Color")),
+                    Location = reader.GetString(reader.GetOrdinal("Location")),
+                    Price = reader.GetDecimal(reader.GetOrdinal("Price")),
+                    Quantity = reader.GetInt32(reader.GetOrdinal("Quantity"))
+                });
+            }
+
+            return results;
+        }
+
     }
 }

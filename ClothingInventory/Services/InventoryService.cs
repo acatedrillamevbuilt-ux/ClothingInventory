@@ -4,7 +4,7 @@ namespace ClothingInventory.Services
 {
     public class InventoryService
     {
-        private const int LowStockLevel = 5;
+        public const int LowStockLevel = 5;
 
         public bool IsAvailable(Product product) => product.Quantity > 0;
 

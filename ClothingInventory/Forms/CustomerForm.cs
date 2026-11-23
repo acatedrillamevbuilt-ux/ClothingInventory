@@ -14,6 +14,61 @@ namespace ClothingInventory.Forms
         {
             InitializeComponent();
 
+            Text = "Customer";
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(1000, 620);
+            grpDetails.Text = "Item details";
+            Theme.Apply(this);
+
+            const int margin = 24, gap = 24, top = 88, leftW = 420;
+            int rightX = margin + leftW + gap;
+            int rightW = ClientSize.Width - rightX - margin;
+
+            // ----- Left column: search, status line, results -----
+            txtSearch.PlaceholderText = "Search by item name";
+            Theme.OutlineInput(txtSearch).Bounds = new Rectangle(margin, top, leftW - 112, 40);
+
+            btnSearch.Text = "Search";
+            btnSearch.SetBounds(margin + leftW - 100, top, 100, 40);
+
+            lblStatus.AutoSize = false;
+            lblStatus.SetBounds(margin, top + 48, leftW, 20);
+
+            lstResults.SetBounds(margin, top + 80, leftW, ClientSize.Height - (top + 80) - margin);
+            lstResults.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+
+            // ----- Right column: details card -----
+            grpDetails.SetBounds(rightX, top, rightW, 260);
+            grpDetails.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+            foreach (var l in new[] { lblName, lblSize, lblColor, lblLocation, lblPrice, lblStock })
+            {
+                grpDetails.Controls.Add(l);
+                l.AutoSize = false;
+            }
+
+            lblName.SetBounds(20, 44, rightW - 40, 32);
+            lblName.Font = Theme.TitleLarge;
+
+            int y = 88;
+            foreach (var l in new[] { lblSize, lblColor, lblLocation, lblPrice })
+            {
+                l.SetBounds(20, y, rightW - 40, 24);
+                l.Font = Theme.BodyLarge;
+                y += 28;
+            }
+
+            lblStock.SetBounds(20, y + 8, rightW - 40, 28);
+            lblStock.Font = Theme.TitleMedium;
+
+            // ----- Right column: quantity and buttons -----
+            Theme.Field(this, "Quantity", nudQuantity, rightX, 364, 120);
+
+            btnConfirm.Text = "Confirm purchase";
+            btnConfirm.SetBounds(rightX + 136, 384, 170, 40);
+            btnCancel.Text = "Cancel";
+            btnCancel.SetBounds(rightX + 136 + 170 + 8, 384, 100, 40);
+
             AcceptButton = btnSearch;
             ClearDetails();
 
@@ -21,6 +76,10 @@ namespace ClothingInventory.Forms
             lstResults.SelectedIndexChanged += lstResults_SelectedIndexChanged;
             btnConfirm.Click += btnConfirm_Click;
             btnCancel.Click += btnCancel_Click;
+
+            Theme.AddAppBar(this, "Customer", "Find an item, check availability and buy");
+            Theme.Finish(this);
+            Shown += (s, e) => txtSearch.Focus();
         }
 
         private void btnSearch_Click(object? sender, EventArgs e)
@@ -31,7 +90,7 @@ namespace ClothingInventory.Forms
 
             if (name == "")
             {
-                lblStatus.Text = "Please enter an item name.";
+                lblStatus.Text = "Type an item name to search.";
                 return;
             }
 
@@ -40,7 +99,7 @@ namespace ClothingInventory.Forms
 
             lblStatus.Text = results.Count == 0
                 ? "No items found."
-                : "Select an item to see its details.";
+                : $"{results.Count} item(s) found. Select one to see its details.";
         }
 
         private void lstResults_SelectedIndexChanged(object? sender, EventArgs e)
@@ -53,12 +112,17 @@ namespace ClothingInventory.Forms
                 return;
             }
 
-            lblName.Text = $"Name: {_selected.Name}";
+            lblName.ForeColor = Theme.OnSurface;
+            lblName.Text = _selected.Name;
             lblSize.Text = $"Size: {_selected.Size}";
             lblColor.Text = $"Color: {_selected.Color}";
             lblLocation.Text = $"Location: {_selected.Location}";
             lblPrice.Text = $"Price: {_selected.Price:C}";
-            lblStock.Text = $"Availability: {_inventoryService.GetStockStatus(_selected)}";
+            lblStock.Text = _inventoryService.GetStockStatus(_selected);
+
+            lblStock.ForeColor = !_inventoryService.IsAvailable(_selected) ? Theme.Error
+                               : _selected.Quantity <= InventoryService.LowStockLevel ? Theme.Warning
+                               : Theme.Success;
 
             bool available = _inventoryService.IsAvailable(_selected);
             btnConfirm.Enabled = available;
@@ -73,25 +137,32 @@ namespace ClothingInventory.Forms
             if (_selected == null) return;
 
             int qty = (int)nudQuantity.Value;
+            decimal total = _selected.Price * qty;
+
+            bool yes = Theme.Confirm(this, "Confirm purchase",
+                $"Buy {qty} x {_selected.Name} ({_selected.Size}, {_selected.Color}) for {total:C}?",
+                "Buy");
+            if (!yes) return;
+
             var result = _salesService.RecordSale(_selected, qty);
 
-            // Refresh the list so the stock numbers are up to date
-            btnSearch_Click(null, EventArgs.Empty);
-            lblStatus.Text = result.Message;
+            btnSearch_Click(null, EventArgs.Empty);   // refresh the stock numbers
+            Theme.Snack(this, result.Message, !result.Success);
         }
 
         private void btnCancel_Click(object? sender, EventArgs e)
         {
             lstResults.ClearSelected();
             ClearDetails();
-            lblStatus.Text = "Purchase cancelled.";
+            Theme.Snack(this, "Purchase cancelled.");
         }
 
         private void ClearDetails()
         {
             _selected = null;
-            lblName.Text = lblSize.Text = lblColor.Text = "";
-            lblLocation.Text = lblPrice.Text = lblStock.Text = "";
+            lblName.ForeColor = Theme.OnSurfaceVariant;
+            lblName.Text = "No item selected";
+            lblSize.Text = lblColor.Text = lblLocation.Text = lblPrice.Text = lblStock.Text = "";
             btnConfirm.Enabled = false;
             btnCancel.Enabled = false;
             nudQuantity.Enabled = false;

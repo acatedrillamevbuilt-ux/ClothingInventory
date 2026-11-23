@@ -10,17 +10,36 @@ namespace ClothingInventory.Forms
         {
             InitializeComponent();
 
+            Text = "Sales history";
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(960, 580);
+            Theme.Apply(this);
+
+            const int margin = 24, top = 88;
+
+            dtpDate.Format = DateTimePickerFormat.Short;
+            dtpDate.SetBounds(margin, top + 6, 160, 28);
+            chkAllDates.Text = "All dates";
+            chkAllDates.AutoSize = true;
+            chkAllDates.Location = new Point(margin + 176, top + 8);
+
+            lblTotal.AutoSize = false;
+            lblTotal.Font = Theme.TitleMedium;
+            lblTotal.SetBounds(margin, top + 52, ClientSize.Width - 2 * margin, 28);
+
+            dgvSales.SetBounds(margin, top + 92, ClientSize.Width - 2 * margin,
+                ClientSize.Height - (top + 92) - margin);
+            dgvSales.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             dgvSales.ReadOnly = true;
             dgvSales.AllowUserToAddRows = false;
-            dgvSales.RowHeadersVisible = false;
             dgvSales.MultiSelect = false;
-            dgvSales.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvSales.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
 
             dtpDate.Value = DateTime.Today;
-
             dtpDate.ValueChanged += (s, e) => LoadSales();
             chkAllDates.CheckedChanged += (s, e) => LoadSales();
+
+            Theme.AddAppBar(this, "Sales history", "Review recorded sales");
+            Theme.Finish(this);
 
             LoadSales();
         }
@@ -39,9 +58,9 @@ namespace ClothingInventory.Forms
             if (dgvSales.Columns["SoldAt"] != null)
                 dgvSales.Columns["SoldAt"].HeaderText = "Date / Time";
             if (dgvSales.Columns["UnitPrice"] != null)
-                dgvSales.Columns["UnitPrice"].DefaultCellStyle.Format = "N2";
+                dgvSales.Columns["UnitPrice"].DefaultCellStyle.Format = "C2";
             if (dgvSales.Columns["Total"] != null)
-                dgvSales.Columns["Total"].DefaultCellStyle.Format = "N2";
+                dgvSales.Columns["Total"].DefaultCellStyle.Format = "C2";
 
             decimal total = sales.Sum(s => s.Total);
             int items = sales.Sum(s => s.Quantity);

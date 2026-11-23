@@ -2,12 +2,34 @@
 {
     public partial class StartForm : Form
     {
-        // For a class project a fixed PIN is fine. A real system would store hashed credentials.
         private const string StaffPin = "1234";
 
         public StartForm()
         {
             InitializeComponent();
+
+            Text = "Clothing Store Inventory";
+            StartPosition = FormStartPosition.CenterScreen;
+            FormBorderStyle = FormBorderStyle.FixedSingle;
+            MaximizeBox = false;
+            ClientSize = new Size(640, 330);
+            Theme.Apply(this);
+
+            lblTitle.Visible = false;   // the app bar replaces this label
+
+            const int margin = 24, gap = 16, top = 96, cardHeight = 200;
+            int cardWidth = (ClientSize.Width - 2 * margin - gap) / 2;
+
+            btnCustomer.SetBounds(margin, top, cardWidth, cardHeight);
+            btnStaff.SetBounds(margin + cardWidth + gap, top, cardWidth, cardHeight);
+
+            Theme.StyleActionCard(btnCustomer, "\uE7BF", "Customer", "Find items and buy",
+                Theme.PrimaryContainer, Theme.OnPrimaryContainer);
+            Theme.StyleActionCard(btnStaff, "\uE77B", "Staff", "Search, restock and sales",
+                Theme.SecondaryContainer, Theme.OnSecondaryContainer);
+
+            Theme.AddAppBar(this, "Clothing Store Inventory", "Choose how you want to continue", back: false);
+            Theme.Finish(this, escapeCloses: false);
 
             btnCustomer.Click += btnCustomer_Click;
             btnStaff.Click += btnStaff_Click;
@@ -21,40 +43,18 @@
 
         private void btnStaff_Click(object? sender, EventArgs e)
         {
-            string? pin = PromptForPin();
-            if (pin == null) return;   // user cancelled
+            string? pin = Theme.PromptPassword(this, "Staff sign-in",
+                "Enter the staff PIN to continue.", "Sign in");
+            if (pin == null) return;
 
             if (pin != StaffPin)
             {
-                MessageBox.Show("Incorrect PIN.", "Access denied",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Theme.Snack(this, "Incorrect PIN. Please try again.", true);
                 return;
             }
 
-            using var form = new StaffSearchForm();
+            using var form = new StaffForm();
             form.ShowDialog(this);
-        }
-
-        private string? PromptForPin()
-        {
-            using var dlg = new Form
-            {
-                Text = "Staff Login",
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                StartPosition = FormStartPosition.CenterParent,
-                MaximizeBox = false,
-                MinimizeBox = false,
-                ClientSize = new Size(260, 110)
-            };
-
-            var lbl = new Label { Text = "Enter staff PIN:", Left = 15, Top = 15, AutoSize = true };
-            var txt = new TextBox { Left = 15, Top = 40, Width = 230, UseSystemPasswordChar = true };
-            var ok = new Button { Text = "OK", Left = 90, Top = 72, DialogResult = DialogResult.OK };
-
-            dlg.Controls.AddRange(new Control[] { lbl, txt, ok });
-            dlg.AcceptButton = ok;
-
-            return dlg.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
         }
     }
 }

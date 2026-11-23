@@ -29,6 +29,9 @@ namespace ClothingInventory.Services
             string? error = Validate(p);
             if (error != null) return (false, error);
 
+            if (_repo.Exists(p.Name, p.Size, p.Color))
+                return (false, $"{p.Name} ({p.Size}, {p.Color}) already exists. Select it and use Restock instead.");
+
             _repo.AddProduct(p);
             return (true, $"Added {p.Name}.");
         }
@@ -38,10 +41,15 @@ namespace ClothingInventory.Services
             string? error = Validate(p);
             if (error != null) return (false, error);
 
+            if (_repo.Exists(p.Name, p.Size, p.Color, p.Id))
+                return (false, "Another item with the same name, size and colour already exists.");
+
             return _repo.UpdateProduct(p)
                 ? (true, $"Updated {p.Name}.")
                 : (false, "Item not found.");
         }
+
+        public List<Product> GetLowStock() => _repo.GetLowStock(InventoryService.LowStockLevel);
 
         public (bool Success, string Message) Restock(int productId, int amount)
         {
