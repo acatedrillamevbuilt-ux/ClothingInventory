@@ -39,6 +39,7 @@ namespace ClothingInventory
         public static readonly Font BodyMedium = new("Segoe UI", 10F);
         public static readonly Font BodyLarge = new("Segoe UI", 11F);
         public static readonly Font LabelMedium = new("Segoe UI Semibold", 9F);
+        public static readonly Font LabelSmall = new("Segoe UI", 8F);
         public static readonly Font LabelLarge = new("Segoe UI Semibold", 10F);
         public static readonly Font TitleMedium = new("Segoe UI Semibold", 11F);
         public static readonly Font TitleLarge = new("Segoe UI", 16F);
@@ -403,6 +404,8 @@ namespace ClothingInventory
         {
             public Control? Input;
             public bool HasFocus;
+            public string? Error;
+            public Label? ErrorLabel;
         }
 
         public static Control OutlineInput(Control input)
@@ -438,7 +441,30 @@ namespace ClothingInventory
             input.EnabledChanged += (s, e) => host.Invalidate();
             host.Click += (s, e) => input.Focus();
             host.Paint += (s, e) => PaintInput(host, e.Graphics);
+
+            if (input is NumericUpDown spinner) spinner.ValueChanged += (s, e) => ClearError(host);
+            else input.TextChanged += (s, e) => ClearError(host);
+
             return host;
+        }
+
+        private static void ClearError(InputHost host)
+        {
+            if (host.Error != null && host.Input != null) SetError(host.Input, null);
+        }
+
+        // Red outline plus a small message under the field; pass null to clear it
+        public static void SetError(Control input, string? message)
+        {
+            if (input.Parent is not InputHost host) return;
+
+            host.Error = message;
+            if (host.ErrorLabel != null)
+            {
+                host.ErrorLabel.Text = message ?? "";
+                host.ErrorLabel.Visible = message != null;
+            }
+            host.Invalidate();
         }
 
         private static void PaintInput(InputHost host, Graphics g)
@@ -448,13 +474,17 @@ namespace ClothingInventory
             g.Clear(bg);
 
             bool enabled = host.Input?.Enabled ?? true;
+            bool hasError = host.Error != null;
+
             Color line = !enabled ? Blend(bg, OnSurface, 0.12)
+                       : hasError ? Error
                        : host.HasFocus ? Primary
                        : Outline;
+            float thickness = hasError || host.HasFocus ? 2f : 1f;
 
             var r = new Rectangle(1, 1, host.Width - 3, host.Height - 3);
             using var path = RoundedRect(r, 4);
-            using var pen = new Pen(line, host.HasFocus ? 2f : 1f);
+            using var pen = new Pen(line, thickness);
             g.DrawPath(pen, path);
         }
 
@@ -474,6 +504,19 @@ namespace ClothingInventory
 
             var host = OutlineInput(input);
             host.Bounds = new Rectangle(x, y + 20, width, 40);
+
+            // Supporting text under the field, shown only when there is an error
+            var error = new Label
+            {
+                Font = LabelSmall,
+                ForeColor = Error,
+                AutoSize = false,
+                Visible = false,
+                Bounds = new Rectangle(x + 4, y + 61, width - 4, 12)
+            };
+            parent.Controls.Add(error);
+            if (host is InputHost inputHost) inputHost.ErrorLabel = error;
+
             return y + 70;
         }
 

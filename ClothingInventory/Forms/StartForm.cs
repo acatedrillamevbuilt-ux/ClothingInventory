@@ -37,6 +37,8 @@
 
         private void btnCustomer_Click(object? sender, EventArgs e)
         {
+            //throw new InvalidOperationException("test"); to check if validation works
+
             using var form = new CustomerForm();
             form.ShowDialog(this);
         }

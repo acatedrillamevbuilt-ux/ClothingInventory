@@ -63,7 +63,16 @@ namespace ClothingInventory.Services
         private static string? Validate(Product p)
         {
             if (string.IsNullOrWhiteSpace(p.Name)) return "Name is required.";
-            if (p.Price < 0) return "Price cannot be negative.";
+            if (string.IsNullOrWhiteSpace(p.Size)) return "Size is required (use One Size if it doesn't apply).";
+            if (string.IsNullOrWhiteSpace(p.Color)) return "Color is required.";
+
+            if (p.Name.Length > 100) return "Name must be 100 characters or fewer.";
+            if (p.Category.Length > 50) return "Category must be 50 characters or fewer.";
+            if (p.Size.Length > 20) return "Size must be 20 characters or fewer.";
+            if (p.Color.Length > 30) return "Color must be 30 characters or fewer.";
+            if (p.Location.Length > 50) return "Location must be 50 characters or fewer.";
+
+            if (p.Price <= 0) return "Price must be greater than zero.";
             if (p.Quantity < 0) return "Quantity cannot be negative.";
             return null;
         }

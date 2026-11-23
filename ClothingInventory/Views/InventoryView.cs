@@ -8,6 +8,17 @@ namespace ClothingInventory.Views
         private readonly ProductService _productService = new ProductService();
         private int? _selectedId;
 
+        private DateTime _lastClick = DateTime.MinValue;
+
+        // Ignores a click that arrives right after another one (double-click or queued click)
+        private bool TooSoon()
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _lastClick).TotalMilliseconds < 600) return true;
+            _lastClick = now;
+            return false;
+        }
+
         private readonly DataGridView dgvProducts = new() { Name = "dgvProducts" };
         private readonly TextBox txtName = new() { Name = "txtName" };
         private readonly TextBox txtCategory = new() { Name = "txtCategory" };
@@ -30,6 +41,13 @@ namespace ClothingInventory.Views
 
             Controls.AddRange(new Control[] { dgvProducts, btnAdd, btnUpdate, btnClear, btnRestock });
             Theme.StyleControls(this);
+
+            // Match the limits used in ProductService.Validate
+            txtName.MaxLength = 100;
+            txtCategory.MaxLength = 50;
+            txtSize.MaxLength = 20;
+            txtColor.MaxLength = 30;
+            txtLocation.MaxLength = 50;
 
             const int margin = 24, panelW = 376;
             int panelX = Width - margin - panelW;
@@ -116,6 +134,11 @@ namespace ClothingInventory.Views
 
         private void btnAdd_Click(object? sender, EventArgs e)
         {
+            if (TooSoon()) return;
+            if (!ValidateFields()) return;
+            if (_selectedId == null) return;   
+            // ...rest of the method unchanged
+
             var result = _productService.AddProduct(ReadFields());
             Theme.Snack(this, result.Message, !result.Success);
 
@@ -124,10 +147,17 @@ namespace ClothingInventory.Views
                 LoadProducts();
                 ClearForm();
             }
+
         }
 
         private void btnUpdate_Click(object? sender, EventArgs e)
         {
+            if (TooSoon()) return;
+            if (!ValidateFields()) return;
+            if (_selectedId == null) return;
+            
+            // ...rest of the method unchanged
+
             if (_selectedId == null) return;
 
             var product = ReadFields();
@@ -145,6 +175,10 @@ namespace ClothingInventory.Views
 
         private void btnRestock_Click(object? sender, EventArgs e)
         {
+            if (TooSoon()) return;
+            if (_selectedId == null) return;
+            // ...rest of the method unchanged
+
             if (_selectedId == null) return;
 
             int id = _selectedId.Value;
@@ -157,6 +191,31 @@ namespace ClothingInventory.Views
                 SelectRowById(id);
                 nudRestock.Value = 1;
             }
+        }
+
+        // Checks the fields before saving and marks each problem on its own field
+        private bool ValidateFields()
+        {
+            Control? first = null;
+            void Fail(Control input, string message)
+            {
+                Theme.SetError(input, message);
+                first ??= input;
+            }
+
+            foreach (var c in new Control[] { txtName, txtSize, txtColor, nudPrice })
+                Theme.SetError(c, null);
+
+            if (string.IsNullOrWhiteSpace(txtName.Text)) Fail(txtName, "Name is required");
+            if (string.IsNullOrWhiteSpace(txtSize.Text)) Fail(txtSize, "Size is required");
+            if (string.IsNullOrWhiteSpace(txtColor.Text)) Fail(txtColor, "Color is required");
+            if (nudPrice.Value <= 0) Fail(nudPrice, "Price must be above 0");
+
+            if (first == null) return true;
+
+            first?.Focus();
+            Theme.Snack(this, "Please fix the highlighted fields.", true);
+            return false;
         }
 
         private Product ReadFields() => new Product
@@ -186,6 +245,8 @@ namespace ClothingInventory.Views
         private void ClearForm()
         {
             _selectedId = null;
+            foreach (var c in new Control[] { txtName, txtSize, txtColor, nudPrice })
+                Theme.SetError(c, null);
             dgvProducts.ClearSelection();
 
             txtName.Clear();

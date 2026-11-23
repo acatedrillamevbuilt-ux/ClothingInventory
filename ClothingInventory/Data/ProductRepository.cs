@@ -71,8 +71,9 @@ namespace ClothingInventory.Data
             conn.Open();
 
             var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT * FROM Products WHERE Name LIKE @name;";
-            cmd.Parameters.AddWithValue("@name", "%" + name + "%");
+            cmd.CommandText = @"SELECT * FROM Products WHERE Name LIKE @name ESCAPE '\';";
+            string safe = name.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
+            cmd.Parameters.AddWithValue("@name", "%" + safe + "%");
 
             using var reader = cmd.ExecuteReader();
             while (reader.Read())

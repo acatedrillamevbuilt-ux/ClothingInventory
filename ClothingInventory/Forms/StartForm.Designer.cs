@@ -71,6 +71,7 @@
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             Name = "StartForm";
+            ShowIcon = false;
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Clothing Store Inventory";
             ResumeLayout(false);
