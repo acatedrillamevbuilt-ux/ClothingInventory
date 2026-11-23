@@ -46,6 +46,7 @@ namespace ClothingInventory.Views
             dgvResults.AllowUserToAddRows = false;
             dgvResults.MultiSelect = false;
             Theme.ShowStockChips(dgvResults, InventoryService.LowStockLevel);
+            Photos.AddToGrid(dgvResults);
 
             txtSearch.KeyDown += (s, e) =>
             {

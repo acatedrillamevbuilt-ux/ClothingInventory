@@ -16,7 +16,7 @@ namespace ClothingInventory.Services
 
             return ok
                 ? (true, $"Sale recorded: {quantity} x {product.Name}. Total: {(product.Price * quantity):C}")
-                : (false, "Sale failed: not enough stock.");
+                : (false, "Sale failed: the item is out of stock or no longer available.");
         }
 
         public List<SaleRecord> GetSales(DateTime? day) => _repo.GetSales(day);

@@ -456,6 +456,12 @@ namespace ClothingInventory
         // Red outline plus a small message under the field; pass null to clear it
         public static void SetError(Control input, string? message)
         {
+            if (input is DropdownField dropdown)
+            {
+                dropdown.SetError(message);
+                return;
+            }
+
             if (input.Parent is not InputHost host) return;
 
             host.Error = message;
@@ -502,7 +508,8 @@ namespace ClothingInventory
                 Bounds = new Rectangle(x, y, width, 18)
             });
 
-            var host = OutlineInput(input);
+            // Dropdowns draw their own outline; text boxes and number boxes are wrapped
+            Control host = input is DropdownField ? input : OutlineInput(input);
             host.Bounds = new Rectangle(x, y + 20, width, 40);
 
             // Supporting text under the field, shown only when there is an error
@@ -512,12 +519,14 @@ namespace ClothingInventory
                 ForeColor = Error,
                 AutoSize = false,
                 Visible = false,
-                Bounds = new Rectangle(x + 4, y + 61, width - 4, 12)
+                Bounds = new Rectangle(x + 4, y + 62, width - 4, 14)
             };
             parent.Controls.Add(error);
-            if (host is InputHost inputHost) inputHost.ErrorLabel = error;
 
-            return y + 70;
+            if (host is InputHost inputHost) inputHost.ErrorLabel = error;
+            else if (host is DropdownField dropdown) dropdown.ErrorLabel = error;
+
+            return y + 82;
         }
 
         // ======================================================================
@@ -552,7 +561,7 @@ namespace ClothingInventory
             lst.BorderStyle = BorderStyle.None;
             lst.BackColor = Surface;
             lst.DrawMode = DrawMode.OwnerDrawFixed;
-            lst.ItemHeight = 60;
+            lst.ItemHeight = 68;
             lst.IntegralHeight = false;
             DoubleBuffer(lst);
 
@@ -578,13 +587,22 @@ namespace ClothingInventory
                     g.FillPath(brush, path);
                 }
 
+                int textX = e.Bounds.X + 22;
+                if (product != null)
+                {
+                    g.DrawImage(ImageStore.Thumb(product, 48, 10),
+                        e.Bounds.X + 16, e.Bounds.Y + (e.Bounds.Height - 48) / 2, 48, 48);
+                    textX = e.Bounds.X + 16 + 48 + 14;
+                }
+
                 Color main = selected ? OnSecondaryContainer : OnSurface;
                 Color sub = selected ? OnSecondaryContainer : OnSurfaceVariant;
+                int textW = e.Bounds.Right - textX - 16;
 
                 TextRenderer.DrawText(g, headline, BodyLarge,
-                    new Rectangle(e.Bounds.X + 22, e.Bounds.Y + 9, e.Bounds.Width - 44, 24), main, LeftMiddle);
+                    new Rectangle(textX, e.Bounds.Y + 15, textW, 24), main, LeftMiddle);
                 TextRenderer.DrawText(g, support, BodyMedium,
-                    new Rectangle(e.Bounds.X + 22, e.Bounds.Y + 32, e.Bounds.Width - 44, 20), sub, LeftMiddle);
+                    new Rectangle(textX, e.Bounds.Y + 38, textW, 20), sub, LeftMiddle);
             };
         }
 
@@ -645,6 +663,7 @@ namespace ClothingInventory
                 var column = g.Columns["Quantity"];
                 if (column == null || !column.Visible) return;
                 if (g.Rows[e.RowIndex].Cells[column.Index].Value is not int q || q > lowLevel) return;
+                if (g.Rows[e.RowIndex].DataBoundItem is Product delistedCheck && !delistedCheck.IsActive) return;
 
                 var cell = g.GetCellDisplayRectangle(column.Index, e.RowIndex, false);
                 if (cell.Width <= 0 || cell.Height <= 0) return;

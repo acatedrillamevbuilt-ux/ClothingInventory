@@ -8,6 +8,7 @@ namespace ClothingInventory.Forms
         private readonly ProductService _productService = new ProductService();
         private readonly InventoryService _inventoryService = new InventoryService();
         private readonly SalesService _salesService = new SalesService();
+        private readonly PhotoBox pbPhoto = new() { Name = "pbPhoto" };
         private Product? _selected;
 
         public CustomerForm()
@@ -16,11 +17,11 @@ namespace ClothingInventory.Forms
 
             Text = "Customer";
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(1000, 620);
+            ClientSize = new Size(1000, 640);
             grpDetails.Text = "Item details";
             Theme.Apply(this);
 
-            const int margin = 24, gap = 24, top = 88, leftW = 420;
+            const int margin = 24, gap = 24, top = 88, leftW = 420, photoSize = 200;
             int rightX = margin + leftW + gap;
             int rightW = ClientSize.Width - rightX - margin;
 
@@ -37,28 +38,33 @@ namespace ClothingInventory.Forms
             lstResults.SetBounds(margin, top + 80, leftW, ClientSize.Height - (top + 80) - margin);
             lstResults.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
 
-            // ----- Right column: details card -----
+            // ----- Right column: details card with the photo on its right -----
             grpDetails.SetBounds(rightX, top, rightW, 260);
             grpDetails.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
+            grpDetails.Controls.Add(pbPhoto);
+            pbPhoto.SetBounds(rightW - 20 - photoSize, 44, photoSize, photoSize);
+
+            int textW = rightW - 40 - photoSize - 16;
             foreach (var l in new[] { lblName, lblSize, lblColor, lblLocation, lblPrice, lblStock })
             {
                 grpDetails.Controls.Add(l);
                 l.AutoSize = false;
+                l.AutoEllipsis = true;
             }
 
-            lblName.SetBounds(20, 44, rightW - 40, 32);
+            lblName.SetBounds(20, 44, textW, 32);
             lblName.Font = Theme.TitleLarge;
 
             int y = 88;
             foreach (var l in new[] { lblSize, lblColor, lblLocation, lblPrice })
             {
-                l.SetBounds(20, y, rightW - 40, 24);
+                l.SetBounds(20, y, textW, 24);
                 l.Font = Theme.BodyLarge;
                 y += 28;
             }
 
-            lblStock.SetBounds(20, y + 8, rightW - 40, 28);
+            lblStock.SetBounds(20, y + 8, textW, 28);
             lblStock.Font = Theme.TitleMedium;
 
             // ----- Right column: quantity and buttons -----
@@ -124,6 +130,8 @@ namespace ClothingInventory.Forms
                                : _selected.Quantity <= InventoryService.LowStockLevel ? Theme.Warning
                                : Theme.Success;
 
+            pbPhoto.ShowStored(_selected.ImagePath, _selected.Name);
+
             bool available = _inventoryService.IsAvailable(_selected);
             btnConfirm.Enabled = available;
             btnCancel.Enabled = true;
@@ -163,6 +171,7 @@ namespace ClothingInventory.Forms
             lblName.ForeColor = Theme.OnSurfaceVariant;
             lblName.Text = "No item selected";
             lblSize.Text = lblColor.Text = lblLocation.Text = lblPrice.Text = lblStock.Text = "";
+            pbPhoto.ShowPlaceholder("?");
             btnConfirm.Enabled = false;
             btnCancel.Enabled = false;
             nudQuantity.Enabled = false;
