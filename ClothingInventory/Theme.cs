@@ -809,17 +809,136 @@ namespace ClothingInventory
             timer.Start();
         }
 
-        public static bool Confirm(IWin32Window owner, string title, string message, string confirmText = "OK")
+        public static bool Confirm(IWin32Window owner, string title, string message,
+                           string confirmText = "OK", string cancelText = "Cancel")
         {
-            using var dlg = NewDialog(title, message, confirmText, false, out _);
+            using var dlg = NewDialog(title, message, confirmText, cancelText,
+                                      Array.Empty<string>(), out _, null);
             return dlg.ShowDialog(owner) == DialogResult.OK;
         }
 
         public static string? PromptPassword(IWin32Window owner, string title, string message,
                                              string confirmText = "OK")
         {
-            using var dlg = NewDialog(title, message, confirmText, true, out var box);
-            return dlg.ShowDialog(owner) == DialogResult.OK ? box?.Text : null;
+            using var dlg = NewDialog(title, message, confirmText, "Cancel",
+                                      new[] { "PIN" }, out var boxes, null);
+            return dlg.ShowDialog(owner) == DialogResult.OK ? boxes[0].Text : null;
+        }
+
+        // Several hidden-text fields. validate returns (fieldIndex, message) for the first problem, or null when OK.
+        public static string[]? PromptSecrets(IWin32Window owner, string title, string message,
+                                              string confirmText, string[] captions,
+                                              Func<string[], (int Field, string Message)?> validate)
+        {
+            using var dlg = NewDialog(title, message, confirmText, "Cancel", captions, out var boxes, validate);
+            return dlg.ShowDialog(owner) == DialogResult.OK
+                ? boxes.Select(b => b.Text).ToArray()
+                : null;
+        }
+
+        private static Form NewDialog(string title, string message, string confirmText, string? cancelText,
+                                      string[] captions, out TextBox[] boxes,
+                                      Func<string[], (int Field, string Message)?>? validate)
+        {
+            const int pad = 24, width = 400;
+
+            var dlg = new Form
+            {
+                Text = "Clothing Store Inventory",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ShowInTaskbar = false,
+                AutoScaleMode = AutoScaleMode.None,
+                Font = BodyMedium,
+                BackColor = SurfaceContainerHigh,
+                ForeColor = OnSurface,
+                ClientSize = new Size(width, 200)
+            };
+
+            int y = pad;
+            dlg.Controls.Add(new Label
+            {
+                Text = title,
+                Font = TitleLarge,
+                AutoSize = false,
+                Bounds = new Rectangle(pad, y, width - 2 * pad, 32)
+            });
+            y += 40;
+
+            var size = TextRenderer.MeasureText(message, BodyMedium,
+                new Size(width - 2 * pad, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+            dlg.Controls.Add(new Label
+            {
+                Text = message,
+                ForeColor = OnSurfaceVariant,
+                AutoSize = false,
+                Bounds = new Rectangle(pad, y, width - 2 * pad, size.Height + 4)
+            });
+            y += size.Height + 20;
+
+            var list = new List<TextBox>();
+            foreach (string caption in captions)
+            {
+                var box = new TextBox { UseSystemPasswordChar = true, MaxLength = 32 };
+                list.Add(box);
+                y = Field(dlg, caption, box, pad, y, width - 2 * pad);
+            }
+            if (captions.Length == 0) y += 4;
+
+            int okWidth = Math.Max(88, TextRenderer.MeasureText(confirmText, LabelLarge).Width + 36);
+            var ok = new Button
+            {
+                Name = "btnDialogOk",
+                Text = confirmText,
+                Size = new Size(okWidth, 40),
+                Location = new Point(width - pad - okWidth, y)
+            };
+            dlg.Controls.Add(ok);
+            StyleButton(ok, M3Button.Text, "");
+
+            if (cancelText != null)
+            {
+                int cancelWidth = Math.Max(88, TextRenderer.MeasureText(cancelText, LabelLarge).Width + 36);
+                var cancel = new Button
+                {
+                    Name = "btnDialogCancel",
+                    Text = cancelText,
+                    DialogResult = DialogResult.Cancel,
+                    Size = new Size(cancelWidth, 40),
+                    Location = new Point(ok.Left - 8 - cancelWidth, y)
+                };
+                dlg.Controls.Add(cancel);
+                StyleButton(cancel, M3Button.Text, "");
+                dlg.CancelButton = cancel;
+            }
+            else dlg.CancelButton = ok;
+
+            ok.Click += (s, e) =>
+            {
+                if (validate != null)
+                {
+                    foreach (var b in list) SetError(b, null);
+
+                    var problem = validate(list.Select(b => b.Text).ToArray());
+                    if (problem != null)
+                    {
+                        SetError(list[problem.Value.Field], problem.Value.Message);
+                        list[problem.Value.Field].Focus();
+                        return;
+                    }
+                }
+
+                dlg.DialogResult = DialogResult.OK;
+            };
+
+            dlg.AcceptButton = ok;
+            dlg.ClientSize = new Size(width, y + 40 + pad - 8);
+            dlg.Shown += (s, e) => list.FirstOrDefault()?.Focus();
+
+            boxes = list.ToArray();
+            return dlg;
         }
 
         private static Form NewDialog(string title, string message, string confirmText,

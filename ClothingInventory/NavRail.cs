@@ -37,6 +37,8 @@ namespace ClothingInventory
             Invalidate();
         }
 
+        public Func<int, bool>? CanLeave;   // return false to refuse a switch (for example, unsaved changes)
+
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int SelectedIndex
@@ -45,6 +47,8 @@ namespace ClothingInventory
             set
             {
                 if (value == _selected || value < 0 || value >= _items.Count) return;
+                if (_selected >= 0 && CanLeave != null && !CanLeave(value)) return;
+
                 _selected = value;
                 Invalidate();
                 SelectedIndexChanged?.Invoke(this, EventArgs.Empty);

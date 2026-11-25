@@ -5,10 +5,17 @@ namespace ClothingInventory.Views
 {
     public class InventoryView : UserControl
     {
+        // Ask "are you sure?" when something looks like a typo
+        private const int BigRestock = 500;
+        private const int BigQuantityChange = 500;
+        private const decimal BigPrice = 10000m;
+        private const decimal PriceJumpFactor = 4m;
+
         private readonly ProductService _productService = new ProductService();
         private Product? _selected;
         private string? _pendingSource;     // a photo the user picked but has not saved yet
         private bool _removeImage;          // the user clicked Remove
+        private bool _quiet;                // true while the code itself is changing the selection
         private DateTime _lastClick = DateTime.MinValue;
 
         private readonly DataGridView dgvProducts = new() { Name = "dgvProducts" };
@@ -22,8 +29,8 @@ namespace ClothingInventory.Views
         private readonly DropdownField ddColor = new() { Name = "ddColor" };
         private readonly DropdownField ddLocation = new() { Name = "ddLocation" };
         private readonly NumericUpDown nudPrice = new() { Name = "nudPrice", DecimalPlaces = 2, Maximum = 100000 };
-        private readonly NumericUpDown nudQuantity = new() { Name = "nudQuantity", Maximum = 100000 };
-        private readonly NumericUpDown nudRestock = new() { Name = "nudRestock", Minimum = 1, Maximum = 100000, Value = 1 };
+        private readonly NumericUpDown nudQuantity = new() { Name = "nudQuantity", Maximum = InventoryService.MaxStock };
+        private readonly NumericUpDown nudRestock = new() { Name = "nudRestock", Minimum = 1, Maximum = InventoryService.MaxStock, Value = 1 };
         private readonly Button btnAdd = new() { Name = "btnAdd", Text = "Add item" };
         private readonly Button btnUpdate = new() { Name = "btnUpdate", Text = "Save changes" };
         private readonly Button btnClear = new() { Name = "btnClear", Text = "Clear" };
@@ -106,6 +113,7 @@ namespace ClothingInventory.Views
             dgvProducts.SelectionChanged += dgvProducts_SelectionChanged;
             btnShowDelisted.Click += (s, e) =>
             {
+                if (!DiscardOk("Changing the filter")) return;
                 Theme.SetChipChecked(btnShowDelisted, !Theme.IsChipChecked(btnShowDelisted));
                 Reload();
             };
@@ -122,9 +130,9 @@ namespace ClothingInventory.Views
             btnRestock.Click += btnRestock_Click;
             btnDelist.Click += btnDelist_Click;
             btnDelete.Click += btnDelete_Click;
-            btnClear.Click += (s, e) => ClearForm();
+            btnClear.Click += (s, e) => { if (DiscardOk("Clearing the form")) ResetForm(); };
 
-            ClearForm();
+            ResetForm();
             Dock = DockStyle.Fill;
         }
 
@@ -135,7 +143,79 @@ namespace ClothingInventory.Views
             LoadProducts();
 
             if (keep != null && SelectRowById(keep.Value)) return;
-            ClearForm();
+            ResetForm();
+        }
+
+        // ---------- Unsaved changes ----------
+        private static bool SameText(string? a, string? b) =>
+            string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+
+        // True if the edit panel differs from what is saved
+        private bool IsDirty()
+        {
+            if (_pendingSource != null || _removeImage) return true;
+
+            if (_selected == null)
+                return txtName.Text.Trim() != "" || ddCategory.Value != "" || ddSize.Value != "" ||
+                       ddColor.Value != "" || ddLocation.Value != "" ||
+                       nudPrice.Value != 0 || nudQuantity.Value != 0;
+
+            var p = _selected;
+            return txtName.Text.Trim() != (p.Name ?? "").Trim() ||
+                   !SameText(ddCategory.Value, p.Category) ||
+                   !SameText(ddSize.Value, p.Size) ||
+                   !SameText(ddColor.Value, p.Color) ||
+                   !SameText(ddLocation.Value, p.Location) ||
+                   nudPrice.Value != p.Price ||
+                   nudQuantity.Value != p.Quantity;
+        }
+
+        private bool DiscardOk(string action)
+        {
+            if (!IsDirty()) return true;
+
+            return Theme.Confirm(FindForm()!, "Discard your changes?",
+                $"You have unsaved changes. {action} will discard them.", "Discard", "Keep editing");
+        }
+
+        // Used by the Staff window before leaving this view or closing
+        public bool ConfirmLeave()
+        {
+            if (!IsDirty()) return true;
+
+            return Theme.Confirm(FindForm()!, "Discard your changes?",
+                "You have unsaved changes in Inventory. If you leave now they will be lost.",
+                "Discard", "Keep editing");
+        }
+
+        // Asks "are you sure?" when a value looks like a typo
+        private bool ConfirmRisky(Product? before, Product after)
+        {
+            var notes = new List<string>();
+
+            if (before == null)
+            {
+                if (after.Quantity >= BigQuantityChange)
+                    notes.Add($"a starting stock of {after.Quantity:N0} units");
+            }
+            else
+            {
+                if (Math.Abs(after.Quantity - before.Quantity) >= BigQuantityChange)
+                    notes.Add($"stock changing from {before.Quantity:N0} to {after.Quantity:N0}");
+
+                if (before.Price > 0 &&
+                    (after.Price >= before.Price * PriceJumpFactor || after.Price <= before.Price / PriceJumpFactor))
+                    notes.Add($"the price changing from {before.Price:C} to {after.Price:C}");
+            }
+
+            if (after.Price >= BigPrice && (before == null || before.Price < BigPrice))
+                notes.Add($"a price of {after.Price:C}");
+
+            if (notes.Count == 0) return true;
+
+            return Theme.Confirm(FindForm()!, "Please double-check",
+                "This looks unusual: " + string.Join(" and ", notes) + ". Save it anyway?",
+                "Save", "Go back");
         }
 
         // Ignores a click that arrives right after another one (double-click or queued click)
@@ -147,20 +227,46 @@ namespace ClothingInventory.Views
             return false;
         }
 
+        // ---------- Loading and selecting ----------
         private void LoadProducts()
         {
-            dgvProducts.DataSource = _productService.GetAll(Theme.IsChipChecked(btnShowDelisted));
+            _quiet = true;
+            try
+            {
+                dgvProducts.DataSource = _productService.GetAll(Theme.IsChipChecked(btnShowDelisted));
 
-            if (dgvProducts.Columns["Id"] != null)
-                dgvProducts.Columns["Id"].Visible = false;
-            if (dgvProducts.Columns["Price"] != null)
-                dgvProducts.Columns["Price"].DefaultCellStyle.Format = "C2";
+                if (dgvProducts.Columns["Id"] != null)
+                    dgvProducts.Columns["Id"].Visible = false;
+                if (dgvProducts.Columns["Price"] != null)
+                    dgvProducts.Columns["Price"].DefaultCellStyle.Format = "C2";
+            }
+            finally
+            {
+                _quiet = false;
+            }
         }
 
         private void dgvProducts_SelectionChanged(object? sender, EventArgs e)
         {
+            if (_quiet) return;
             if (dgvProducts.SelectedRows.Count == 0) return;
             if (dgvProducts.SelectedRows[0].DataBoundItem is not Product p) return;
+
+            // Moving to a different item while editing: ask, and go back if they say no
+            if (p.Id != _selected?.Id && IsDirty() && !DiscardOk("Selecting another item"))
+            {
+                _quiet = true;
+                try
+                {
+                    if (_selected != null) SelectRowById(_selected.Id);
+                    else dgvProducts.ClearSelection();
+                }
+                finally
+                {
+                    _quiet = false;
+                }
+                return;
+            }
 
             _selected = p;
             _pendingSource = null;
@@ -172,6 +278,7 @@ namespace ClothingInventory.Views
             ddColor.Value = p.Color;
             ddLocation.Value = p.Location;
             nudPrice.Value = p.Price;
+            nudQuantity.Maximum = Math.Max(InventoryService.MaxStock, p.Quantity);
             nudQuantity.Value = p.Quantity;
 
             btnUpdate.Enabled = true;
@@ -249,10 +356,11 @@ namespace ClothingInventory.Views
             if (TooSoon()) return;
             if (!ValidateFields()) return;
 
+            var product = ReadFields();
+            if (!ConfirmRisky(null, product)) return;
+
             string? image = ResolveImage(true, out bool imported);
             if (image == null) return;
-
-            var product = ReadFields();
             product.ImagePath = image;
 
             var result = _productService.AddProduct(product);
@@ -265,7 +373,7 @@ namespace ClothingInventory.Views
             }
 
             LoadProducts();
-            ClearForm();
+            ResetForm();
         }
 
         private void btnUpdate_Click(object? sender, EventArgs e)
@@ -275,11 +383,13 @@ namespace ClothingInventory.Views
             if (!ValidateFields()) return;
 
             var old = _selected;
-            string? image = ResolveImage(false, out bool imported);
-            if (image == null) return;
-
             var product = ReadFields();
             product.Id = old.Id;
+            product.IsActive = old.IsActive;
+            if (!ConfirmRisky(old, product)) return;
+
+            string? image = ResolveImage(false, out bool imported);
+            if (image == null) return;
             product.ImagePath = image;
 
             var result = _productService.UpdateProduct(product);
@@ -294,23 +404,38 @@ namespace ClothingInventory.Views
             if (old.ImagePath != "" && old.ImagePath != image)
                 ImageStore.Delete(old.ImagePath);
 
+            // The saved item becomes the baseline, so the refreshed row isn't treated as unsaved work
+            _selected = product;
+            _pendingSource = null;
+            _removeImage = false;
+
             LoadProducts();
-            if (!SelectRowById(old.Id)) ClearForm();
+            if (!SelectRowById(old.Id)) ResetForm();
         }
 
         private void btnRestock_Click(object? sender, EventArgs e)
         {
             if (TooSoon()) return;
             if (_selected == null) return;
+            if (!DiscardOk("Restocking")) return;
+
+            int amount = (int)nudRestock.Value;
+            if (amount >= BigRestock)
+            {
+                bool yes = Theme.Confirm(FindForm()!, "Add a large amount of stock?",
+                    $"Add {amount:N0} units to \"{_selected.Name}\"? It currently has {_selected.Quantity:N0}. " +
+                    "Check there is no extra zero.", "Add stock", "Go back");
+                if (!yes) return;
+            }
 
             int id = _selected.Id;
-            var result = _productService.Restock(id, (int)nudRestock.Value);
+            var result = _productService.Restock(id, amount);
             Theme.Snack(this, result.Message, !result.Success);
 
             if (result.Success)
             {
                 LoadProducts();
-                if (!SelectRowById(id)) ClearForm();
+                if (!SelectRowById(id)) ResetForm();
                 nudRestock.Value = 1;
             }
         }
@@ -319,6 +444,7 @@ namespace ClothingInventory.Views
         {
             if (TooSoon()) return;
             if (_selected == null) return;
+            if (!DiscardOk("Delisting")) return;
 
             var p = _selected;
             (bool Success, string Message) result;
@@ -340,13 +466,14 @@ namespace ClothingInventory.Views
             if (!result.Success) return;
 
             LoadProducts();
-            if (!SelectRowById(p.Id)) ClearForm();
+            if (!SelectRowById(p.Id)) ResetForm();
         }
 
         private void btnDelete_Click(object? sender, EventArgs e)
         {
             if (TooSoon()) return;
             if (_selected == null) return;
+            if (!DiscardOk("Deleting")) return;
 
             var p = _selected;
             bool yes = Theme.Confirm(FindForm()!, "Delete this item permanently?",
@@ -360,7 +487,7 @@ namespace ClothingInventory.Views
             if (result.Success)
             {
                 LoadProducts();
-                ClearForm();
+                ResetForm();
             }
         }
 
@@ -417,7 +544,8 @@ namespace ClothingInventory.Views
             return false;
         }
 
-        private void ClearForm()
+        // Empties the edit panel (no questions asked: callers check for unsaved work first)
+        private void ResetForm()
         {
             _selected = null;
             _pendingSource = null;
@@ -431,6 +559,7 @@ namespace ClothingInventory.Views
             ddLocation.Value = "";
             nudPrice.Value = 0;
             nudQuantity.Value = 0;
+            nudQuantity.Maximum = InventoryService.MaxStock;
             nudRestock.Value = 1;
 
             foreach (var c in new Control[] { txtName, ddCategory, ddSize, ddColor, ddLocation, nudPrice })

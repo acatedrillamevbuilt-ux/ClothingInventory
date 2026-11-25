@@ -1,9 +1,9 @@
-﻿namespace ClothingInventory.Forms
+﻿using ClothingInventory.Services;
+
+namespace ClothingInventory.Forms
 {
     public partial class StartForm : Form
     {
-        private const string StaffPin = "1234";
-
         public StartForm()
         {
             InitializeComponent();
@@ -37,26 +37,77 @@
 
         private void btnCustomer_Click(object? sender, EventArgs e)
         {
-            //throw new InvalidOperationException("test"); to check if validation works
-
             using var form = new CustomerForm();
             form.ShowDialog(this);
         }
 
         private void btnStaff_Click(object? sender, EventArgs e)
         {
-            string? pin = Theme.PromptPassword(this, "Staff sign-in",
-                "Enter the staff PIN to continue.", "Sign in");
-            if (pin == null) return;
+            var pins = new PinService();
 
-            if (pin != StaffPin)
+            if (!pins.IsPinSet())
             {
-                Theme.Snack(this, "Incorrect PIN. Please try again.", true);
-                return;
+                if (!CreatePin(pins)) return;
+            }
+            else
+            {
+                var locked = pins.LockRemaining();
+                if (locked != null)
+                {
+                    Theme.Snack(this,
+                        $"Staff sign-in is locked. Try again in {PinService.Describe(locked.Value)}.", true);
+                    return;
+                }
+
+                string? pin = Theme.PromptPassword(this, "Staff sign-in",
+                    "Enter the staff PIN to continue.", "Sign in");
+                if (pin == null) return;
+
+                var result = pins.Verify(pin, out int attemptsLeft, out TimeSpan lockFor);
+
+                if (result == PinResult.Locked)
+                {
+                    Theme.Snack(this,
+                        $"Too many wrong attempts. Locked for {PinService.Describe(lockFor)}.", true);
+                    return;
+                }
+
+                if (result == PinResult.Wrong)
+                {
+                    Theme.Snack(this,
+                        $"Incorrect PIN. {attemptsLeft} attempt(s) left before a short lock.", true);
+                    return;
+                }
             }
 
             using var form = new StaffForm();
             form.ShowDialog(this);
+        }
+
+        // First use: the owner chooses the staff PIN
+        private bool CreatePin(PinService pins)
+        {
+            var texts = Theme.PromptSecrets(this, "Create a staff PIN",
+                "No staff PIN has been set yet. Choose one now; staff will use it to open the Staff area.",
+                "Save PIN", new[] { "New PIN", "Confirm PIN" },
+                t =>
+                {
+                    string? rule = PinService.CheckRules(t[0]);
+                    if (rule != null) return (0, rule);
+                    if (t[0] != t[1]) return (1, "PINs don't match");
+                    return null;
+                });
+            if (texts == null) return false;
+
+            var saved = pins.SetPin(texts[0]);
+            if (!saved.Success)
+            {
+                Theme.Snack(this, saved.Message, true);
+                return false;
+            }
+
+            Theme.Snack(this, "Staff PIN saved.");
+            return true;
         }
     }
 }

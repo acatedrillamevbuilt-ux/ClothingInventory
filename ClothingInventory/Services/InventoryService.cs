@@ -5,6 +5,7 @@ namespace ClothingInventory.Services
     public class InventoryService
     {
         public const int LowStockLevel = 5;
+        public const int MaxStock = 10000;
 
         public bool IsAvailable(Product product) => product.Quantity > 0;
 

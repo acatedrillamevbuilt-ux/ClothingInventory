@@ -53,10 +53,15 @@ namespace ClothingInventory.Services
         public (bool Success, string Message) Restock(int productId, int amount)
         {
             if (amount <= 0) return (false, "Restock amount must be at least 1.");
+            if (amount > InventoryService.MaxStock)
+                return (false, $"You can restock at most {InventoryService.MaxStock:N0} units at a time.");
 
-            return _repo.Restock(productId, amount)
-                ? (true, $"Added {amount} to stock.")
-                : (false, "Item not found.");
+            return _repo.Restock(productId, amount, InventoryService.MaxStock) switch
+            {
+                RestockOutcome.Done => (true, $"Added {amount:N0} to stock."),
+                RestockOutcome.OverLimit => (false, $"That would take stock above {InventoryService.MaxStock:N0} units."),
+                _ => (false, "Item not found.")
+            };
         }
 
         public (bool Success, string Message) Delist(Product p) =>
@@ -98,6 +103,8 @@ namespace ClothingInventory.Services
 
             if (p.Price <= 0) return "Price must be greater than zero.";
             if (p.Quantity < 0) return "Quantity cannot be negative.";
+            if (p.Quantity > InventoryService.MaxStock)
+                return $"Stock can't be more than {InventoryService.MaxStock:N0} units.";
             return null;
         }
     }
